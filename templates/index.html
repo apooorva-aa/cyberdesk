@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberDesk Security Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 30px;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            width: 50%;
+            margin: auto;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px gray;
+        }
+
+        input,
+        button {
+            padding: 10px;
+            margin: 10px;
+            font-size: 16px;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        .result {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h2>🔐 CyberDesk Security Dashboard</h2>
+
+        <!-- Password Strength Checker -->
+        <h3>Password Strength Checker</h3>
+        <input type="password" id="passwordInput" placeholder="Enter password">
+        <button onclick="checkPassword()">Check</button>
+        <p class="result" id="passwordResult"></p>
+
+        <!-- Browser Privacy Scanner -->
+        <h3>Browser Privacy Scanner</h3>
+        <button onclick="checkBrowser()">Scan</button>
+        <p class="result" id="browserResult"></p>
+
+        <!-- Microphone & Camera Hijack Detector -->
+        <h3>Microphone & Camera Hijack Detection</h3>
+        <button onclick="checkMicCam()">Check</button>
+        <p class="result" id="micCamResult"></p>
+
+    </div>
+
+    <script>
+        async function checkPassword() {
+            let password = document.getElementById("passwordInput").value;
+            let response = await fetch("http://127.0.0.1:5000/check_password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ password })
+            });
+            let data = await response.json();
+            document.getElementById("passwordResult").innerText = "Result: " + data.password_strength;
+        }
+
+        async function checkBrowser() {
+            let response = await fetch("http://127.0.0.1:5000/check_browser");
+            let data = await response.json();
+            document.getElementById("browserResult").innerText =
+                data.privacy_warnings.length > 0 ? data.privacy_warnings.join(", ") : "✅ No privacy issues detected.";
+        }
+
+        async function checkMicCam() {
+            try {
+                let response = await fetch("http://127.0.0.1:5000/check_mic_cam");
+                let data = await response.json(); // Parse JSON correctly
+                console.log("Mic Cam JSON Response:", data); // Debugging
+
+                document.getElementById("micCamResult").innerText =
+                    (data.microphone_alerts.length > 0 ? "⚠️ " + data.microphone_alerts.join(", ") : "✅ Microphone Safe.") +
+                    "\n" +
+                    (data.camera_alerts.length > 0 ? "⚠️ " + data.camera_alerts.join(", ") : "✅ Camera Safe.");
+            } catch (error) {
+                console.error("Error fetching mic/cam data:", error);
+                document.getElementById("micCamResult").innerText = "Error: Check console.";
+            }
+        }
+    </script>
+
+</body>
+
+</html>
