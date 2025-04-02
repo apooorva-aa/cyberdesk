@@ -41,9 +41,8 @@
 </head>
 
 <body>
-
     <div class="container">
-        <h2>🔐 CyberDesk Security Dashboard</h2>
+        <h2>CyberDesk Security Dashboard</h2>
 
         <!-- Password Strength Checker -->
         <h3>Password Strength Checker</h3>
@@ -61,6 +60,15 @@
         <button onclick="checkMicCam()">Check</button>
         <p class="result" id="micCamResult"></p>
 
+        <!-- Background Network Sniffing Detection -->
+        <h3>Background Network Sniffing Detection</h3>
+        <button onclick="checkNetworkSniffing()">Scan</button>
+        <p class="result" id="networkSniffingResult"></p>
+
+        <!-- Port Scanner -->
+        <h3>Port Scanner</h3>
+        <button onclick="scanPorts()">Scan</button>
+        <p class="result" id="portScannerResult"></p>
     </div>
 
     <script>
@@ -79,26 +87,63 @@
             let response = await fetch("http://127.0.0.1:5000/check_browser");
             let data = await response.json();
             document.getElementById("browserResult").innerText =
-                data.privacy_warnings.length > 0 ? data.privacy_warnings.join(", ") : "✅ No privacy issues detected.";
+                data.privacy_warnings.length > 0 ? data.privacy_warnings.join(", ") : "No privacy issues detected.";
         }
 
         async function checkMicCam() {
             try {
                 let response = await fetch("http://127.0.0.1:5000/check_mic_cam");
-                let data = await response.json(); // Parse JSON correctly
-                console.log("Mic Cam JSON Response:", data); // Debugging
+                let data = await response.json();
+                console.log("Mic Cam JSON Response:", data);
 
                 document.getElementById("micCamResult").innerText =
-                    (data.microphone_alerts.length > 0 ? "⚠️ " + data.microphone_alerts.join(", ") : "✅ Microphone Safe.") +
+                    (data.microphone_alerts.length > 0 ? data.microphone_alerts.join(", ") : "Microphone Safe.") +
                     "\n" +
-                    (data.camera_alerts.length > 0 ? "⚠️ " + data.camera_alerts.join(", ") : "✅ Camera Safe.");
+                    (data.camera_alerts.length > 0 ? data.camera_alerts.join(", ") : "Camera Safe.");
             } catch (error) {
                 console.error("Error fetching mic/cam data:", error);
                 document.getElementById("micCamResult").innerText = "Error: Check console.";
             }
         }
-    </script>
 
+        async function checkNetworkSniffing() {
+            let response = await fetch("http://127.0.0.1:5000/detect_sniffing");
+            let data = await response.json();
+            let resultText = "";
+            if (data.promiscuous_mode.promiscuous_mode) {
+                resultText += "Network card is in promiscuous mode (possible sniffer).\n";
+            } else {
+                resultText += "No promiscuous mode detected.\n";
+            }
+
+            if (data.arp_spoofing.arp_spoofing_detected) {
+                resultText += `ARP Spoofing Detected! Suspicious MAC: ${data.arp_spoofing.suspect_mac}\n`;
+            } else {
+                resultText += "No ARP spoofing detected.\n";
+            }
+
+            if (data.dns_spoofing.dns_spoofing_detected) {
+                resultText += `DNS Spoofing Detected! DNS resolved to: ${data.dns_spoofing.resolved_ip}\n`;
+            } else {
+                resultText += "No DNS spoofing detected.\n";
+            }
+
+            if (data.unknown_devices.unknown_devices.length > 0) {
+                resultText += `Unknown devices found on network: ${data.unknown_devices.unknown_devices.length}\n`;
+            } else {
+                resultText += "No unknown devices detected.\n";
+            }
+
+            document.getElementById("networkSniffingResult").innerText = resultText;
+        }
+
+        async function scanPorts() {
+            let response = await fetch("http://127.0.0.1:5000/scan_ports");
+            let data = await response.json();
+            document.getElementById("portScannerResult").innerText =
+                `Local IP: ${data.local_ip}\nOpen Ports: ${data.open_ports.join(", ")}`;
+        }
+    </script>
 </body>
 
 </html>
