@@ -1,0 +1,9 @@
+dnspython
+flask
+flask_cors
+joblib
+netifaces
+pandas
+psutil
+scapy
+scikit-learn

@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import json
-from python import password_checker, port_scanner, mic_cam_monitor, browser_check, network_sniffer
+from python import password_checker, port_scanner, mic_cam_monitor, browser_check, network_sniffer, process_monitor
 
 app = Flask(__name__)
 CORS(app)
@@ -26,20 +26,26 @@ def check_browser():
     privacy_data = browser_check.check_browser_privacy()
     return jsonify(privacy_data)
 
-@app.route("/detect_sniffing", methods=["POST"])
+@app.route("/detect_sniffing", methods=["GET", "POST"])
 def detect_sniffing():
-    data = request.json
-    admin = data.get("admin", False)
+    if request.method == "POST":
+        if not request.is_json:
+            return jsonify({"error": "Content-Type must be application/json"}), 415
+        data = request.get_json()
+        admin = data.get("admin", False)
+    else:
+        admin = False
 
     if admin:
-        promisc = network_sniffer.check_promiscuous_mode()
-        arp_spoof = network_sniffer.check_arp_spoofing()
+        promisc = network_sniffer.check_promiscuous_mode(skip_admin=True)
+        arp_spoof = network_sniffer.check_arp_spoofing(skip_admin=True)
+        unknown_devices = network_sniffer.detect_unknown_devices(skip_admin=True)
     else:
         promisc = {"error": "Admin privileges required"}
         arp_spoof = {"error": "Admin privileges required"}
+        unknown_devices = {"error": "Admin privileges required"}
 
     dns_spoof = network_sniffer.check_dns_spoofing()
-    unknown_devices = network_sniffer.detect_unknown_devices()
 
     return jsonify({
         "promiscuous_mode": promisc,
@@ -53,6 +59,14 @@ def scan_ports():
     ip_info = port_scanner.get_ip()
     open_ports = port_scanner.scan_ports(ip_info["local_ip"])
     return jsonify({"local_ip": ip_info["local_ip"], "open_ports": open_ports})
+
+@app.route('/check_process_anomalies')
+def check_process_anomalies():
+    try:
+        results = process_monitor.get_anomalous_processes()
+        return jsonify({"anomalies": results})
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 @app.route("/")
 def home():

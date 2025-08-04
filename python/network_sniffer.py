@@ -1,8 +1,10 @@
 import os
 import sys
 import scapy.all as scapy
-import netifaces, socket, requests
+import netifaces
+import socket
 import ctypes
+import dns.resolver
 
 def ensure_admin():
     if os.name == 'nt':
@@ -14,17 +16,6 @@ def ensure_admin():
             print("This script requires root privileges. Please run with sudo.")
             sys.exit(1)
 
-def check_promiscuous_mode():
-    ensure_admin()
-    interface = get_active_interface()
-    if not interface:
-        return {"error": "No active network interface detected"}
-    
-    cmd = f"ip link show {interface} | grep PROMISC"
-    output = os.popen(cmd).read()
-
-    return {"promiscuous_mode" : bool(output.strip())}
-
 def get_active_interface():
     interfaces = netifaces.interfaces()
     for iface in interfaces:
@@ -32,6 +23,17 @@ def get_active_interface():
         if netifaces.AF_INET in adds:
             return iface
     return None
+
+def check_promiscuous_mode(skip_admin = False):
+    if not skip_admin:
+        ensure_admin()
+    interface = get_active_interface()
+    if not interface:
+        return {"error": "No active network interface detected"}
+    
+    cmd = f"ip link show {interface} | grep PROMISC"
+    output = os.popen(cmd).read()
+    return {"promiscuous_mode": bool(output.strip())}
 
 def get_local_subnet():
     try:
@@ -53,47 +55,87 @@ def get_local_subnet():
         return str(e)
     return None
 
-def check_arp_spoofing():
-    ensure_admin()
+def check_arp_spoofing(skip_admin = False):
+    if not skip_admin:
+        ensure_admin()
     subnet = get_local_subnet()
     if not subnet:
-        return {"error" : "Failed to determine local subnet"}
-    
-    arp_request = scapy.ARP(pdst=subnet)
-    broadcast = scapy.Ether(dst="ff:ff:ff:ff:ff:ff")
-    arp_request_broadcast = broadcast / arp_request
-    answered, _ = scapy.srp(arp_request_broadcast, timeout=2, verbose=False)
+        return {"error": "Failed to determine local subnet"}
 
-    mac_list = {}
-    for sent, received in answered:
-        if received.hwsrc in mac_list:
-            return {"arp_spoofing_detected": True, "suspect_mac": received.hwsrc}
-        mac_list[received.hwsrc] = received.psrc
-
-    return {"arp_spoofing_detected": False}
-
-def check_dns_spoofing():
     try:
-        trusted_dns_ip = "8.8.8.8"
-        resolved_ip = socket.gethostbyname("google.com")
-        subnet = get_local_subnet()
+        arp_request = scapy.ARP(pdst=subnet)
+        broadcast = scapy.Ether(dst="ff:ff:ff:ff:ff:ff")
+        arp_request_broadcast = broadcast / arp_request
+        answered, _ = scapy.srp(arp_request_broadcast, timeout=2, verbose=False)
+
+        mac_to_ip = {}
+        suspects = []
+
+        for _, received in answered:
+            if received.hwsrc in mac_to_ip and mac_to_ip[received.hwsrc] != received.psrc:
+                suspects.append({
+                    "mac": received.hwsrc,
+                    "ip1": mac_to_ip[received.hwsrc],
+                    "ip2": received.psrc
+                })
+            mac_to_ip[received.hwsrc] = received.psrc
+
         return {
-            "dns_spoofing_detected": resolved_ip != trusted_dns_ip,
-            "resolved_ip": resolved_ip,
-            "expected_ip": trusted_dns_ip,
-            "local_subnet": subnet
+            "arp_spoofing_detected": len(suspects) > 0,
+            "suspects": suspects
         }
     except Exception as e:
         return {"error": str(e)}
 
-def detect_unknown_devices():
-    ensure_admin()
+def check_dns_spoofing():
+    domain = "google.com"
+    trusted_dns_servers = {
+        "Google DNS": "8.8.8.8",
+        "Cloudflare DNS": "1.1.1.1",
+        "Quad9 DNS": "9.9.9.9",
+        "OpenDNS": "208.67.222.222"
+    }
+
+    try:
+        system_ip = socket.gethostbyname(domain)
+
+        trusted_ips = {}
+        for name, server in trusted_dns_servers.items():
+            resolver = dns.resolver.Resolver()
+            resolver.nameservers = [server]
+            try:
+                ip = resolver.resolve(domain)[0].to_text()
+                trusted_ips[name] = ip
+            except Exception as e:
+                trusted_ips[name] = f"Error: {str(e)}"
+
+        is_spoofed = system_ip not in trusted_ips.values()
+
+        return {
+            "dns_spoofing_detected": is_spoofed,
+            "system_ip": system_ip,
+            "trusted_dns_results": trusted_ips
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
+
+def detect_unknown_devices(skip_admin = False):
+    if not skip_admin:
+        ensure_admin()
+    subnet = get_local_subnet()
+    if not subnet:
+        return {"error": "Could not get local subnet"}
+
     known_devices = ["YourRouterMAC", "YourDeviceMAC"]
-    scan_result = scapy.arping("192.168.1.1/24", verbose=False)[0]
+    try:
+        answered, _ = scapy.arping(subnet, timeout=2, verbose=False)
 
-    unknown_devices = []
-    for _, received in scan_result:
-        if received.hwsrc not in known_devices:
-            unknown_devices.append({"ip": received.psrc, "mac": received.hwsrc})
+        unknown_devices = []
+        for _, received in answered:
+            if received.hwsrc not in known_devices:
+                unknown_devices.append({"ip": received.psrc, "mac": received.hwsrc})
 
-    return {"unknown_devices": unknown_devices}
+        return {"unknown_devices": unknown_devices}
+    except Exception as e:
+        return {"error": str(e)}

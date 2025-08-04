@@ -6,3 +6,8 @@ Current features :-
     2. Browser Check
     3. Port Scanner
     4. Unusual Mic & Cam Monitors
+    5. Network Sniffer
+        a. Promiscuous Mode
+        b. ARP Spoofing
+        c. DNS Spoofing
+        d. Unknown Devices

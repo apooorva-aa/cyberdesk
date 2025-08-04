@@ -69,6 +69,11 @@
         <h3>Port Scanner</h3>
         <button onclick="scanPorts()">Scan</button>
         <p class="result" id="portScannerResult"></p>
+
+        <!-- Real-Time Process Anomaly Detection -->
+        <h3>Real-Time Process Anomaly Detection</h3>
+        <button onclick="checkProcessAnomalies()">Scan</button>
+        <p class="result" id="processAnomalyResult"></p>
     </div>
 
     <script>
@@ -107,29 +112,47 @@
         }
 
         async function checkNetworkSniffing() {
-            let response = await fetch("http://127.0.0.1:5000/detect_sniffing");
+            let response = await fetch("http://127.0.0.1:5000/detect_sniffing", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ admin: true })
+            });
+
             let data = await response.json();
             let resultText = "";
-            if (data.promiscuous_mode.promiscuous_mode) {
+
+            if (data.promiscuous_mode.promiscuous_mode === true) {
                 resultText += "Network card is in promiscuous mode (possible sniffer).\n";
+            } else if (data.promiscuous_mode.error) {
+                resultText += `Promiscuous Mode Check Error: ${data.promiscuous_mode.error}\n`;
             } else {
                 resultText += "No promiscuous mode detected.\n";
             }
 
-            if (data.arp_spoofing.arp_spoofing_detected) {
-                resultText += `ARP Spoofing Detected! Suspicious MAC: ${data.arp_spoofing.suspect_mac}\n`;
+            if (data.arp_spoofing.arp_spoofing_detected === true) {
+                resultText += `ARP Spoofing Detected! Suspect MAC(s): ${JSON.stringify(data.arp_spoofing.suspects || [])}\n`;
+            } else if (data.arp_spoofing.error) {
+                resultText += `ARP Spoofing Check Error: ${data.arp_spoofing.error}\n`;
             } else {
                 resultText += "No ARP spoofing detected.\n";
             }
 
-            if (data.dns_spoofing.dns_spoofing_detected) {
-                resultText += `DNS Spoofing Detected! DNS resolved to: ${data.dns_spoofing.resolved_ip}\n`;
+            if (data.dns_spoofing.dns_spoofing_detected === true) {
+                resultText += `DNS Spoofing Detected!
+                                System DNS resolved google.com to: ${data.dns_spoofing.system_ip}\n`;
+
+            } else if (data.dns_spoofing.error) {
+                resultText += `DNS Spoofing Check Error: ${data.dns_spoofing.error}\n`;
             } else {
                 resultText += "No DNS spoofing detected.\n";
             }
 
-            if (data.unknown_devices.unknown_devices.length > 0) {
+            if (Array.isArray(data.unknown_devices.unknown_devices) && data.unknown_devices.unknown_devices.length > 0) {
                 resultText += `Unknown devices found on network: ${data.unknown_devices.unknown_devices.length}\n`;
+            } else if (data.unknown_devices.error) {
+                resultText += `Unknown Devices Scan Error: ${data.unknown_devices.error}\n`;
             } else {
                 resultText += "No unknown devices detected.\n";
             }
@@ -142,6 +165,26 @@
             let data = await response.json();
             document.getElementById("portScannerResult").innerText =
                 `Local IP: ${data.local_ip}\nOpen Ports: ${data.open_ports.join(", ")}`;
+        }
+
+        async function checkProcessAnomalies() {
+            let response = await fetch("http://127.0.0.1:5000/check_process_anomalies");
+            let data = await response.json();
+
+            if (data.error) {
+                document.getElementById("processAnomalyResult").innerText = "Error: " + data.error;
+                return;
+            }
+
+            if (data.anomalies.length === 0) {
+                document.getElementById("processAnomalyResult").innerText = "No suspicious processes detected.";
+            } else {
+                let resultText = "Suspicious Processes Detected:\n\n";
+                data.anomalies.forEach(p => {
+                    resultText += `PID: ${p.pid}, Name: ${p.name}, CPU: ${p.cpu}%, Memory: ${p.mem}%\n`;
+                });
+                document.getElementById("processAnomalyResult").innerText = resultText;
+            }
         }
     </script>
 </body>
