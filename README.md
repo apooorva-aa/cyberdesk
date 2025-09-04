@@ -24,7 +24,11 @@ CyberDesk is a system security dashboard that provides visibility into key secur
    - **DNS Spoofing Detection**: Monitors for potential DNS hijacks.
    - **Unknown Device Discovery**: Lists unfamiliar devices on the same network.
 
-## Upcoming Features
-
-- **Suspicious CPU Activity Detection**  
+6. **Suspicious CPU Activity Detection**  
   Identify abnormal patterns in CPU usage that may indicate malicious activity.
+
+
+## Fixes Required:
+   - Improve password strength checker to actually analyze the password and not just the validity.
+   - Check accuracy of DNS spoofing and improve accordingly.
+   - Real time anomaly detection is not working (at all. it's bad). Research about that and use a better approach.
